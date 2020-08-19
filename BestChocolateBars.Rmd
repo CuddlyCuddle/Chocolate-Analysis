@@ -1,0 +1,190 @@
+---
+title: "An Overview of artisan Chocolates"
+author: "Jean-Pierre"
+date: "`r Sys.Date()`"
+output:
+  prettydoc::html_pretty:
+    theme: rmdformats::readthedown
+    highlight: zenburn
+---
+
+```{r, include = FALSE}
+library(data.table)
+library(stringr)
+library(dplyr)
+library(DT)
+library(ggplot2)
+library(forcats)
+library(RColorBrewer)
+library(rmdformats)
+```
+
+# Introduction
+## Questions
+What beans, companies, countries and or manufacturers produce the highest rated chocolate bars? 
+What makes a chocolate bar high quality?
+What are the ratings of the bars by unique characteristics?
+Can this information be used to predict which chocolate bars will produce the highest ratings?
+
+
+```{r, echo = FALSE}
+#Reading in the dataset
+Chocolate <- fread("C:/Users/jeanp/OneDrive/Documents/GitHub/Chocolate Analysis/chocolate.csv")
+
+```
+
+## Data Cleaning
+```{r, results = 'hide', warning = FALSE}
+# Observing Structure of the dataset
+str(Chocolate)
+head(Chocolate)
+names(Chocolate)
+
+
+# Changing Column Names
+colnames(Chocolate) <- str_remove_all(names(Chocolate), " ")
+colnames(Chocolate)[colnames(Chocolate) == "Company(Manufacturer)"] <- "Manufacturer"
+
+
+# Changing Cocoa Percent into a numeric fraction
+Chocolate$CocoaPercent <- as.numeric(str_remove_all(Chocolate$CocoaPercent, "%"))/100
+# Chocolate$CompanyLocation <- str_remove_all(Chocolate$CompanyLocation, 'DOT')
+
+
+# Counting the number of unique values for Company Location and Manufacturer
+length(unique(Chocolate$Manufacturer))
+length(unique(Chocolate$CompanyLocation))
+length(unique(Chocolate$CountryofBeanOrigin))
+length(unique(Chocolate$SpecificBeanOriginorBarName))
+
+# Counting number of missing observations by column
+sapply(Chocolate, FUN = function(x){sum(is.na(x))})
+# Ingredient should have missing values
+```
+
+## Companies with the highest Average Rating
+```{r}
+# Exploratory Data Analysis
+# Which Manufacturer Produces the best Chocolates
+datatable(
+  ByComp <- Chocolate %>%
+  group_by(Manufacturer, CompanyLocation) %>%
+  summarize(AvgRating = mean(Rating),
+            BarsReviewed = n()) %>%
+  arrange(desc(AvgRating))
+  )
+```
+
+```{r, warning = FALSE}
+# Visualization of top companies for companies with the highest quantity of bars reviewed
+ByComp %>% 
+  ggplot(aes(x = fct_reorder(Manufacturer, AvgRating), y = AvgRating)) + 
+  geom_point() +
+  coord_flip() +
+  theme(
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank()
+  )
+
+```
+
+
+
+
+
+```{r, warning = FALSE}
+# Exploratory Data analysis
+# Which country produced the best chocolates
+datatable(
+ChocByCountry  <- Chocolate %>%
+  group_by(CompanyLocation) %>%
+  summarize(AvgRating = mean(Rating),
+            BarsReviewed = n()) %>%
+  arrange(desc(AvgRating))
+  )
+```
+
+
+```{r,  warning = FALSE}
+# Visualization
+ChocByCountry$CompanyLocation <- factor(ChocByCountry$CompanyLocation, levels = ChocByCountry$CompanyLocation[order(ChocByCountry$AvgRating)]) 
+
+# Ordered Scatter Plot
+ggplot(top_n(ChocByCountry, 20), aes(CompanyLocation, AvgRating, color = CompanyLocation)) +
+  geom_point() + 
+  coord_flip() +
+  scale_fill_brewer(palette = 'Reds') +
+  theme(
+    legend.position = 'none'
+  )
+
+
+# Violin Plots
+Countries <- top_n(ChocByCountry, 10)$CompanyLocation
+ggplot(Chocolate[which(CompanyLocation %in% Countries)], aes(x = CompanyLocation, y = Rating)) +
+  geom_violin(aes(fill = CompanyLocation)) + 
+  scale_fill_brewer(palette = 'Reds') +
+  geom_boxplot(width = 0.1) +
+  theme_minimal() + 
+  coord_flip() + 
+  theme(legend.position="none")
+
+```
+
+
+```{r}
+
+
+```
+
+
+
+```{r}
+
+
+```
+
+
+```{r}
+
+
+```
+
+
+```{r}
+
+
+```
+
+
+```{r}
+
+
+```
+
+```{r}
+
+
+```
+
+```{r}
+
+
+```
+
+
+```{r}
+
+
+```
+
+
+```{r}
+
+
+```
+
+
+
+
+

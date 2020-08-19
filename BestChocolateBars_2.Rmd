@@ -1,0 +1,367 @@
+---
+title: "An Overview of Artisan Chocolates"
+date: "`r Sys.Date()`"
+output:
+  rmdformats::readthedown:
+    highlight: kate
+    code_folding: hide
+---
+
+
+```{r setup, echo=FALSE, cache=FALSE}
+library(knitr)
+library(rmdformats)
+
+## Global options
+options(max.print="75")
+opts_chunk$set(cache=TRUE,
+               prompt=FALSE,
+               tidy=TRUE,
+               comment=NA,
+               message=FALSE,
+               warning=FALSE)
+opts_knit$set(width=75)
+```
+
+# Introduction
+  This is a simple project that I wanted to perform in order to reinforce the skills I am learning within R, and to create reference code for possible future events; in addition, this is meant to reinforce, develop, and increase the efficacy of my coding habits in order to output clean, readible code in a prompt manner. 
+  The dataset here has been provided by [Flavors of Cacao](http://flavorsofcacao.com/index.html), it is a website where they discuss craft chocolates and provide general information about chocolate and information to help small chocolatiers become successful. It is a very helpful site in regards to a person who wishes to expand their knowledge of chocolates or to a novice connoisseur. The dataset is posted on the website and it contains 10 variables regarding the chocolate bars: 
+
+  1. Ref: The reference number of the review
+  2. Company: The name of the company which produced the bar
+  3. Company Location: The country the company is based
+  4. Review Date: The year in which the chocolate bar was reviewed
+  5. Country of Bean Origin: The origin country of the cacoa used for the chocolate
+  6. Specific Bean Origin or Bar Name: This variable will be omitted from the analysis
+  7. Cocoa Percent: The "darkness" of the cocoa
+  8. Ingredients: The list of ingredients used in the chocolate (B = Beans, S = Sugar, S* = Sweetener other than white cane or beet sugar, C = Cocoa Butter, V = Vanilla, L = Lecithin, Sa = Salt)
+  9. Most Memorable Characteristics: Memorable flavors of the chocolate
+  10. Rating: The score given to the chocolate from 1 to 5, [further information on the review guide](http://flavorsofcacao.com/review_guide.html)
+
+## Questions
+As I explore and analyze this dataset, I hope to answer the following questions:
+
+* What beans, companies, countries and or manufacturers produce the highest rated chocolate bars?
+* What makes a chocolate bar high quality?
+* What are the ratings of the bars by unique characteristics?
+* Can this information be used to predict which chocolate bars will be awarded the highest ratings?
+
+
+```{r, echo = FALSE}
+library(data.table)
+library(stringr)
+library(dplyr)
+library(DT)
+library(ggplot2)
+library(forcats)
+library(RColorBrewer)
+library(rmdformats)
+library(broom)
+
+#Reading in the dataset
+Chocolate <- fread("C:/Users/jeanp/OneDrive/Documents/GitHub/Chocolate Analysis/chocolate.csv")
+
+```
+
+# Data Cleaning
+```{r, results = 'hide', warning = FALSE}
+# Observing Structure of the dataset
+str(Chocolate)
+head(Chocolate)
+names(Chocolate)
+
+# Changing Column Names
+colnames(Chocolate) <- str_remove_all(names(Chocolate), " ")
+colnames(Chocolate)[colnames(Chocolate) == "Company(Manufacturer)"] <- "Manufacturer"
+
+
+# Changing Cocoa Percent into a numeric fraction
+Chocolate$CocoaPercent <- as.numeric(str_remove_all(Chocolate$CocoaPercent, "%"))/100
+Chocolate$CompanyLocation <- str_remove_all(Chocolate$CompanyLocation, '\\.')
+
+# Adding Missing Values
+Chocolate$Ingredients[Chocolate$Ingredients == ""] <- NA_character_
+
+# Counting the number of unique values for Company Location and Manufacturer
+length(unique(Chocolate$Manufacturer))
+length(unique(Chocolate$CompanyLocation))
+length(unique(Chocolate$CountryofBeanOrigin))
+length(unique(Chocolate$SpecificBeanOriginorBarName))
+
+# Counting number of missing observations by column
+sapply(Chocolate, FUN = function(x){sum(is.na(x))})
+
+datatable(
+  Chocolate
+)
+```
+
+# Setion 1: An Examination by Bean Origin, Country, and Company
+## Companies with the highest Average Rating
+### A table of the Companies with the highest average rating
+```{r}
+# Exploratory Data Analysis
+# Which Manufacturer Produces the best Chocolates
+datatable(
+  ByComp <- Chocolate %>%
+  group_by(Manufacturer, CompanyLocation) %>%
+  summarize(AvgRating = round(mean(Rating), 2),
+            BarsReviewed = n()) %>%
+  arrange(desc(AvgRating))
+  )
+```
+
+  The table presented above can be sorted based on the columns; in addition, specific values can be searched for in the search box. Both of these tools can be used to specify a search to a specific country, manufacturer, score, or the quantity of bars reviewed.
+
+### A graph of the average ratings by company
+```{r, warning = FALSE}
+# Visualization of top companies for companies with the highest quantity of bars reviewed
+ByComp %>% 
+  ggplot(aes(x = fct_reorder(Manufacturer, AvgRating), y = AvgRating)) + 
+  geom_point() +
+  coord_flip() +
+  theme(
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank()
+  ) +
+  labs(y = "Average Rating",
+      x = "Manufacturer")
+```
+
+
+  Based on the graph presented above, there is a significant amount of companies who have an average score around 3. The scores appear to be a sigmoid as there are bounds to this dataset; however, the upper bound of the score theoretically is 5, but the graphic above shows that realistically, the limit appears to be `r max(Chocolate$Rating)` as that is the highest rating ever achieved by any chocolate bar, specifically `r sum(Chocolate$Rating == max(Chocolate$Rating))`. 
+    
+  Moreover, the companies which appear to have an average rating at the realistic bounds of 1 and 4 appear to have have less or 1 bar which has been reviewed. This is information that can be seen in the table as well. 
+
+
+### A graph of the companies with the highest amount of bars reviewed
+```{r}
+topComp <- ByComp %>% 
+  arrange(desc(BarsReviewed))
+
+Chocolate[Chocolate$Manufacturer %in% topComp$Manufacturer[1:10]] %>%
+  ggplot(aes(x = Manufacturer, y = Rating)) +
+  geom_violin(aes(fill = Manufacturer)) + 
+  scale_fill_brewer(palette = 'Reds') +
+  geom_boxplot(width = 0.1) +
+  theme_minimal() + 
+  coord_flip() + 
+  theme(legend.position="none") + 
+  labs(x = "Company",
+       y = "Rating")
+```
+
+
+
+```{r}
+ggplot(ByComp, aes(AvgRating)) + 
+  geom_histogram(fill = '#c23830') + 
+  theme_minimal()
+
+```
+
+Above we can see the distribution of the average ratings for all of the countries and it can be seen that the distribution is left tail skewed and there is a solid cuttoff at a rating of 4. 
+
+## Countries with the highest average rating
+### A table of the Countries with the highest average rating
+```{r, warning = FALSE}
+# Exploratory Data analysis
+# Which country produced the best chocolates
+datatable(
+ChocByCountry  <- Chocolate %>%
+  group_by(CompanyLocation) %>%
+  summarize(AvgRating = round(mean(Rating), 2),
+            BarsReviewed = n()) %>%
+  arrange(desc(AvgRating))
+  )
+```
+
+### Graphical Representations of Countries with the Most Bars Reviewed {.tabset}
+#### Ordered Scatter Plot
+```{r,  warning = FALSE}
+# Visualization
+ChocByCountry$CompanyLocation <- factor(ChocByCountry$CompanyLocation, levels = ChocByCountry$CompanyLocation[order(ChocByCountry$AvgRating)]) 
+
+# Ordered Scatter Plot
+ggplot(top_n(ChocByCountry, 20), aes(CompanyLocation, AvgRating, color = CompanyLocation)) +
+  geom_point() + 
+  coord_flip() +
+  theme_minimal() +
+  theme(
+    legend.position = 'none'
+  ) +
+  geom_text(aes(x = CompanyLocation,
+                y = AvgRating,
+                label = BarsReviewed),
+                hjust = 1.25,
+                size = 2.5) +
+    labs(x = "Country",
+       y = "Average Rating")
+
+```
+
+#### Violin Plot
+```{r}
+# Violin Plots
+Countries <- top_n(ChocByCountry, 10)$CompanyLocation
+ggplot(Chocolate[which(CompanyLocation %in% Countries)], aes(x = CompanyLocation, y = Rating)) +
+  geom_violin(aes(fill = CompanyLocation)) + 
+  scale_fill_brewer(palette = 'Reds') +
+  geom_boxplot(width = 0.1) +
+  theme_minimal() + 
+  coord_flip() + 
+  theme(legend.position="none") + 
+  labs(x = "Country",
+       y = "Rating")
+
+```
+
+### {-}
+
+  The graphs above have been limited to the countries with the highest amount of bars rated due to the fact that there is a significant amount of countries who obtain a top position with few bars reviewed.
+
+
+## Bean Origin with the highest average rating
+### A table of the bean origin with the highest average rating
+```{r, warning = FALSE}
+# Exploratory Data analysis
+# Which country produced the best chocolates
+datatable(
+ByOrigin  <- Chocolate %>%
+  group_by(CountryofBeanOrigin) %>%
+  summarize(AvgRating = round(mean(Rating), 2),
+            BarsReviewed = n()) %>%
+  arrange(desc(AvgRating))
+  )
+```
+
+### Graphical Representations of Bean Origins the Most Bars Reviewed {.tabset}
+#### Ordered Scatter Plot
+```{r,  warning = FALSE}
+# Visualization
+# Ordered Scatter Plot
+ggplot(top_n(ByOrigin, 20), aes(fct_reorder(CountryofBeanOrigin, AvgRating), AvgRating, color = CountryofBeanOrigin)) +
+  geom_point() + 
+  coord_flip() +
+  theme_minimal() +
+  theme(
+    legend.position = 'none'
+  ) +
+  geom_text(aes(x = CountryofBeanOrigin,
+                y = AvgRating,
+                label = BarsReviewed),
+                hjust = 1.25,
+                size = 2.5) +
+    labs(x = "Bean Origin",
+       y = "Average Rating")
+
+```
+
+
+#### Violin Plot
+```{r}
+# Violin Plots
+Origin <- top_n(ByOrigin, 10)$CountryofBeanOrigin
+ggplot(Chocolate[which(CountryofBeanOrigin %in% Origin)], aes(x = CountryofBeanOrigin, y = Rating)) +
+  geom_violin(aes(fill = CountryofBeanOrigin)) + 
+  scale_fill_brewer(palette = 'Reds') +
+  geom_boxplot(width = 0.1) +
+  theme_minimal() + 
+  coord_flip() + 
+  theme(legend.position="none") + 
+  labs(x = "Bean Origin",
+       y = "Rating")
+
+```
+
+### {-}
+
+
+## Summary
+
+### Company
+
+  In this section, not much can be said about which companies are better in an absolute manner because each most companies have a different quantity of chocolate bars reviewed. In order to correctly account for the difference in the number of bars reviewed, there should be mathematically weighted.
+
+### Company Location
+  Once again, the data faces the same problem, there is not enough reviewed bars for some countries, and so countries with too few reviews cannot be accurately compared against countries which have a large number of bars reviewed.
+  
+### Bean Origin
+  The country of origin for the bean does not make much of a difference when it comes to the rating of the chocolate bars because most of the beans from the specified origins are relatively close to the mean rating of the chocolate bars. 
+
+```{r}
+Choc_test <- tidy(t.test(Chocolate$Rating, Chocolate$Rating[Chocolate$CountryofBeanOrigin == "Ghana"]))
+colnames(Choc_test) <- c("estimate", "estimate1", "estimate2", "statistic", "p.value", "parameter", "conf.low", "conf.high", "method", "alternative")
+
+for(i in 1:nrow(ByOrigin)){
+  temp0 <- unique(Chocolate$CountryofBeanOrigin) 
+  co_r <- Chocolate$Rating[Chocolate$CountryofBeanOrigin == temp0[i]]
+  if(length(co_r) > 15){
+  Choc_test[i,] <- tidy(t.test(Chocolate$Rating, co_r))}
+  else{
+  co_r2 <- mean(co_r)
+  Choc_test[i,] <- cbind(tidy(t.test(Chocolate$Rating, mu = co_r2)), estimate1 = NA, estimate2 = NA)[, c(1, 9, 10, 2, 3, 4, 5, 6, 7, 8)]}
+}
+Choc_test <- cbind(temp0,Choc_test)
+datatable(round(Choc_test[, c(2,3,4,5,6,7,8,9)],3))
+```
+
+# Section 2: Analysis of Cocoa concentration on Rating
+## Statistics of Ratings and Cocoa Percent{.tabset}
+### Examining the Distribution of Ratings
+```{r}
+ggplot(Chocolate, aes(Rating)) +
+  geom_histogram(bins = 15, 
+                 fill = "#c23830")
+
+```
+
+### Examining the Distribution of Cocoa Percent
+```{r}
+ggplot(Chocolate, aes(CocoaPercent)) +
+  geom_histogram(bins = 20, 
+                 fill = "#c23830")
+
+```
+
+### A Regression Line {.active}
+
+```{r}
+# Polynomial Regression
+Model1 <- lm(Rating ~ poly(CocoaPercent, 2), data = Chocolate)
+Mod.Sum <- summary(Model1)
+
+# Loess
+Model2 <- loess(Rating ~ CocoaPercent, data = Chocolate)
+
+
+ggplot(Chocolate, aes(CocoaPercent, Rating)) + 
+  geom_point() +
+  geom_smooth(method = "loess", se = T) +
+  stat_smooth(method="lm", se=TRUE, fill= NA,
+                formula= y ~ poly(x, 2, raw=TRUE),colour="red") + 
+  geom_vline(xintercept = Chocolate$CocoaPercent[which.max(fitted(Model1))],
+             linetype="dashed", 
+             color = "red", size=1) +
+  geom_vline(xintercept = Chocolate$CocoaPercent[which.max(fitted(Model2))],
+             linetype="dashed", 
+             color = "blue", size=1) +
+  labs(x = "Proportion of Cocoa") + 
+  theme_minimal()
+```
+
+<center>
+```{r}
+knitr::kable(tidy(Model1))
+```
+</center>
+
+## Summary
+  Originally, I thought that the data would have a better visually correlation, and I thought that there would be a purely linear relationship, however, the relationship between the proportion of cocoa and the rating seem parabolic in structure. In addition, the explanatory power is weaker because the R-Squared is `r Mod.Sum$r.squared` which means that the proportion of cocoa explain `r Mod.Sum$r.squared*100`% of the variation in rating. This was not the result I was expecting as I naturally correlate a higher proportion of cocoa with a higher quality chocolate bar. 
+  
+
+  The dashed lines are the proportion cocoa at which the predicted value is at its peak with the local regression line in blue having a peak at`r Chocolate$CocoaPercent[which.max(fitted(Model2))]` proportion cocoa and the polynomial regression in red having a peak of `r Chocolate$CocoaPercent[which.max(fitted(Model2))]` proportion cocoa. In addition, the mean proportion cocoa for the chocolate bars which score a rating of 4 is `r mean(Chocolate$PercentCocoa[Chocolate$PercentCocoa == 4])`. 
+  
+
+# Section 3: Analysis of Bar Characteristics on Rating
+
