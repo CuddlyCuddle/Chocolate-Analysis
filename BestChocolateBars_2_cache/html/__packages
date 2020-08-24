@@ -9,3 +9,4 @@ ggplot2
 forcats
 RColorBrewer
 broom
+tidyr

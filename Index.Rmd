@@ -57,6 +57,7 @@ library(forcats)
 library(RColorBrewer)
 library(rmdformats)
 library(broom)
+library(tidyr)
 
 #Reading in the dataset
 Chocolate <- fread("C:/Users/jeanp/OneDrive/Documents/GitHub/Chocolate Analysis/chocolate.csv")
@@ -91,10 +92,32 @@ length(unique(Chocolate$SpecificBeanOriginorBarName))
 # Counting number of missing observations by column
 sapply(Chocolate, FUN = function(x){sum(is.na(x))})
 
+# Chocolate 2: Separating conjoined variables
+Chocolate2 <- Chocolate %>%
+  separate(Ingredients, into = c("No.Ingredients","Ingredients"), sep = "(- )|(-)") %>%
+  mutate(Bean = str_detect(Ingredients,"B"),
+         Sugar = ifelse(str_detect(Ingredients, "S") == TRUE & str_detect(Ingredients, fixed("S*")) == FALSE, TRUE, FALSE),
+         Sweetener = str_detect(Ingredients, fixed("S*")),
+         CocoaButter = str_detect(Ingredients, "C"),
+         Vanilla = str_detect(Ingredients, "V"),
+         Lecithin = str_detect(Ingredients, "L"),
+         Salt = str_detect(Ingredients, "Sa")
+         )
+temptemp <- Chocolate2[Chocolate2$Salt == T & Chocolate2$Sugar == T]
+
+#   separate(MostMemorableCharacteristics, into = c("Char1", "Char2","Char3","Char4"), sep = ",", fill = 'right') 
+# 
+# Chocolate$MostMemorableCharacteristics <- strsplit(Chocolate$MostMemorableCharacteristics, ",")
+# str(Chocolate)
+
 datatable(
   Chocolate
 )
 ```
+
+This dataset is relatively clean with few missing values, `sapply(Chocolate, FUN = function(x){sum(is.na(x))})`: the missing values are concentrated in one variable labelled ingredients. From the original data, only standard data cleaning precedures were implemented, including but not limited to altering variable names, altering strings for consistency, and separating variables.  
+
+The separation of the variables ingredients and the most memorable qualities of the chocolate was the most intricate part of the cleaning process. This dataframe was saved into a separate dataset in order to conduct further research.
 
 # Setion 1: An Examination by Bean Origin, Country, and Company
 ## Companies with the highest Average Rating
@@ -303,7 +326,8 @@ for(i in 1:nrow(ByOrigin)){
   Choc_test[i,] <- cbind(tidy(t.test(Chocolate$Rating, mu = co_r2)), estimate1 = NA, estimate2 = NA)[, c(1, 9, 10, 2, 3, 4, 5, 6, 7, 8)]}
 }
 Choc_test <- cbind(temp0,Choc_test)
-datatable(round(Choc_test[, c(2,3,4,5,6,7,8,9)],3))
+Choc_test[, c(2,3,4,5,6,7,8,9)]  <- round(Choc_test[, c(2,3,4,5,6,7,8,9)],3)
+datatable(Choc_test)
 ```
 
 # Section 2: Analysis of Cocoa concentration on Rating
@@ -324,8 +348,7 @@ ggplot(Chocolate, aes(CocoaPercent)) +
 
 ```
 
-### A Regression Line {.active}
-
+### Polynomial Regression Line (Rating explained by Proportion Cocoa) {.active}
 ```{r}
 # Polynomial Regression
 Model1 <- lm(Rating ~ poly(CocoaPercent, 2), data = Chocolate)
@@ -333,7 +356,6 @@ Mod.Sum <- summary(Model1)
 
 # Loess
 Model2 <- loess(Rating ~ CocoaPercent, data = Chocolate)
-
 
 ggplot(Chocolate, aes(CocoaPercent, Rating)) + 
   geom_point() +
@@ -348,6 +370,12 @@ ggplot(Chocolate, aes(CocoaPercent, Rating)) +
              color = "blue", size=1) +
   labs(x = "Proportion of Cocoa") + 
   theme_minimal()
+
+# Min Max Scaling
+Chocolate$RatingScaled <- (Chocolate$Rating - 1)/(4)
+
+# Logistic Regression
+Model3 <- glm(RatingScaled ~ poly(CocoaPercent, 2), data = Chocolate, family = binomial)
 ```
 
 <center>
@@ -359,9 +387,78 @@ knitr::kable(tidy(Model1))
 ## Summary
   Originally, I thought that the data would have a better visually correlation, and I thought that there would be a purely linear relationship, however, the relationship between the proportion of cocoa and the rating seem parabolic in structure. In addition, the explanatory power is weaker because the R-Squared is `r Mod.Sum$r.squared` which means that the proportion of cocoa explain `r Mod.Sum$r.squared*100`% of the variation in rating. This was not the result I was expecting as I naturally correlate a higher proportion of cocoa with a higher quality chocolate bar. 
   
-
-  The dashed lines are the proportion cocoa at which the predicted value is at its peak with the local regression line in blue having a peak at`r Chocolate$CocoaPercent[which.max(fitted(Model2))]` proportion cocoa and the polynomial regression in red having a peak of `r Chocolate$CocoaPercent[which.max(fitted(Model2))]` proportion cocoa. In addition, the mean proportion cocoa for the chocolate bars which score a rating of 4 is `r mean(Chocolate$PercentCocoa[Chocolate$PercentCocoa == 4])`. 
+  The dashed lines are the proportion cocoa at which the predicted value is at its peak with the local regression line in blue having a peak at`r Chocolate$CocoaPercent[which.max(fitted(Model2))]` proportion cocoa and the polynomial regression in red having a peak of `r Chocolate$CocoaPercent[which.max(fitted(Model2))]` proportion cocoa. In addition, the mean proportion cocoa for the chocolate bars which score a rating of 4 is `r mean(Chocolate$PercentCocoa[Chocolate$PercentCocoa == 4])`.
   
+  Another problem which should be addressed is that the data is continuous and bounded and a logistic regression was created to test out bounding the response variable by limiting the response variable to [0,1] interval through min-max standardization, however, given the shape of the data, the linear regression was more appropriate as the overall ratings of chocolate bars which approached 100% from 80% of cocoa percentage on average had a lower rating, most likely due to the strong bitterness of the pure cocoa bean leading to unbalanced flavors. This is not coherent with a logistic regression and it proved that it was not the valid model choice
 
-# Section 3: Analysis of Bar Characteristics on Rating
 
+# Section 3: Analysis of Bar Ingredients on Rating
+```{r}
+Chocolate2 %>%
+  ggplot(aes(No.Ingredients,
+             Rating,
+             fill = as.factor(No.Ingredients))) +
+  geom_boxplot() +
+  theme_minimal()
+
+```
+
+Based on the graph above, the number of ingredients used in the process to convert the cocoa into chocolate does not appear to have a significant difference between each other as the means are within the interquartile range (the boxes) for each of the factors.
+
+
+## Visualization of Factors {.tabset}
+
+### Sugar
+```{r}
+Chocolate2 %>% filter(!is.na(Sugar)) %>%
+ggplot(aes(x = CocoaPercent, y = Rating, color = Sugar)) +
+  geom_point() +
+  stat_smooth(method = "lm", formula = y ~ poly(x, 2))
+```
+
+
+### Sweetener
+```{r}
+Chocolate2 %>% filter(!is.na(Sweetener)) %>%
+ggplot(aes(x = CocoaPercent, y = Rating, color = Sweetener)) +
+  geom_point() +
+  stat_smooth(method = "lm", formula = y ~ poly(x, 2))
+```
+
+
+### Cocoa Butter
+```{r}
+Chocolate2 %>% filter(!is.na(CocoaButter)) %>%
+ggplot(aes(x = CocoaPercent, y = Rating, color = CocoaButter)) +
+  geom_point() +
+  stat_smooth(method = "lm", formula = y ~ poly(x, 2))
+```
+
+
+### Vanilla
+```{r}
+Chocolate2 %>% filter(!is.na(Vanilla)) %>%
+ggplot(aes(x = CocoaPercent, y = Rating, color = Vanilla)) +
+  geom_point() +
+  stat_smooth(method = "lm", formula = y ~ poly(x, 2))
+
+```
+
+## Linear Model
+```{r}
+formula = Rating ~ 0 + poly(CocoaPercent,2) + Sugar + Sweetener + Vanilla + CocoaButter + Lecithin
+
+CModel1 <- lm(formula, Chocolate2)
+sum.CMod <- summary(CModel1)
+Ingred.ModelData <- tidy(CModel1)
+Ingred.ModelData$Sig.1 <- ifelse(Ingred.ModelData$p.value < .1, TRUE, FALSE)
+Ingred.ModelData$Sig.05 <- ifelse(Ingred.ModelData$p.value < .05, TRUE, FALSE)
+Ingred.ModelData$Sig.01 <- ifelse(Ingred.ModelData$p.value < .01, TRUE, FALSE)
+knitr::kable(Ingred.ModelData)
+```
+
+## Summary
+  
+  In this section a linear regression was created containing all of the additive ingredients in the cocoa during the process of converting cocoa into chocolate. It can be seen that most of these variables are statistically significant, however, they have little impact on the actual rating as none of them provides a true significant advantage over the other. Due to the small quantity of individuals who use an artificial sweetener over a sugar especially at the tails of the data; this leads to a shape that may not be representative of the true shape of a data.
+  
+  It is important to note that difference in the rating between these variables are almost negligable and none of them appears to provide a true significant advantage in chocolate bar rating.
