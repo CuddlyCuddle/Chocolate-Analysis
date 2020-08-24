@@ -1,0 +1,12 @@
+base
+knitr
+rmdformats
+data.table
+stringr
+dplyr
+DT
+ggplot2
+forcats
+RColorBrewer
+broom
+tidyr
